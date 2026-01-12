@@ -1,0 +1,1262 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة المحل التجاري</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+            flex-shrink: 0;
+        }
+        
+        .search-box {
+            flex-grow: 1;
+            max-width: 500px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .search-box input:focus {
+            border-color: #4a6fa5;
+            outline: none;
+        }
+        
+        .add-btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .add-btn:hover {
+            background-color: #219653;
+        }
+        
+        .table-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .items-table {
+            width: 100%;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            overflow: auto;
+            height: 100%;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+        
+        thead {
+            background-color: #4a6fa5;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        
+        th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 1.05rem;
+            position: relative;
+        }
+        
+        .toggle-price-visibility {
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.1rem;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        
+        .toggle-price-visibility:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .toggle-profit-visibility {
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.1rem;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        
+        .toggle-profit-visibility:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        
+        tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        td {
+            padding: 16px 15px;
+            text-align: right;
+        }
+        
+        .item-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .price-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .primary-price {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .secondary-price {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-top: 3px;
+        }
+        
+        .purchase-price .primary-price {
+            color: #e74c3c;
+        }
+        
+        .sale-price .primary-price {
+            color: #27ae60;
+        }
+        
+        .profit-percent {
+            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+        }
+        
+        .profit-positive {
+            background-color: rgba(39, 174, 96, 0.15);
+            color: #27ae60;
+        }
+        
+        .profit-negative {
+            background-color: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+        }
+        
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .quantity-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background-color: #f1f2f6;
+            color: #2c3e50;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .quantity-btn:hover {
+            background-color: #dfe4ea;
+        }
+        
+        .quantity-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .edit-btn, .delete-btn {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .edit-btn {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .edit-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .delete-btn {
+            background-color: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+        }
+        
+        .delete-btn:hover {
+            background-color: rgba(231, 76, 60, 0.2);
+        }
+        
+        .capital-footer {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+        }
+        
+        .capital-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .capital-info {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .capital-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .capital-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 5px;
+        }
+        
+        .capital-value {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .capital-secondary {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 3px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 10px 20px;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+            background-color: white;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .modal-header h2 {
+            color: #2c3e50;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #7f8c8d;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus {
+            border-color: #4a6fa5;
+            outline: none;
+        }
+        
+        .currency-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: #7f8c8d;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .save-btn, .cancel-btn {
+            padding: 12px 25px;
+            border-radius: 8px;
+            border: none;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .save-btn {
+            background-color: #27ae60;
+            color: white;
+        }
+        
+        .save-btn:hover {
+            background-color: #219653;
+        }
+        
+        .cancel-btn {
+            background-color: #f1f2f6;
+            color: #2c3e50;
+        }
+        
+        .cancel-btn:hover {
+            background-color: #dfe4ea;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #bdc3c7;
+        }
+        
+        .hidden-price {
+            filter: blur(5px);
+            user-select: none;
+            transition: filter 0.3s;
+        }
+        
+        .hidden-profit {
+            filter: blur(5px);
+            user-select: none;
+            transition: filter 0.3s;
+        }
+        
+        .visible-price {
+            filter: none;
+        }
+        
+        .visible-profit {
+            filter: none;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 0;
+            }
+            
+            .app-container {
+                height: 100vh;
+            }
+            
+            th, td {
+                padding: 12px 8px;
+                font-size: 0.9rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .search-box {
+                max-width: 100%;
+            }
+            
+            .add-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .quantity-controls {
+                justify-content: center;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .capital-info {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .capital-container {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
+            
+            th, td {
+                padding: 10px 5px;
+                font-size: 0.85rem;
+            }
+            
+            .primary-price {
+                font-size: 1rem;
+            }
+            
+            .secondary-price {
+                font-size: 0.75rem;
+            }
+            
+            .capital-value {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="ابحث عن قطعة بالاسم...">
+            </div>
+            <button class="add-btn" id="addItemBtn">
+                <i class="fas fa-plus"></i> إضافة قطعة جديدة
+            </button>
+        </div>
+        
+        <div class="table-container">
+            <div class="items-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>اسم القطعة</th>
+                            <th>
+                                سعر الشراء
+                                <button class="toggle-price-visibility" id="togglePurchasePrice">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </th>
+                            <th>سعر البيع</th>
+                            <th>
+                                نسبة الربح
+                                <button class="toggle-profit-visibility" id="toggleProfitPercent">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </th>
+                            <th>الكمية المتوفرة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsTableBody">
+                        <tr class="loading">
+                            <td colspan="6">جاري تحميل البيانات...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="capital-footer">
+            <div class="capital-container">
+                <div class="capital-info">
+                    <div class="capital-item">
+                        <div class="capital-label">رأس المال الكلي:</div>
+                        <div class="capital-value" id="totalCapitalPrimary">$0.00</div>
+                        <div class="capital-secondary" id="totalCapitalSecondary">0.00 ﷼</div>
+                    </div>
+                    <div class="capital-item">
+                        <div class="capital-label">إجمالي الربح المحتمل:</div>
+                        <div class="capital-value" id="totalProfitPrimary">$0.00</div>
+                        <div class="capital-secondary" id="totalProfitSecondary">0.00 ﷼</div>
+                    </div>
+                </div>
+                <button class="settings-btn" id="settingsBtn">
+                    <i class="fas fa-cog"></i> الإعدادات
+                </button>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>تم التطوير باستخدام Firebase Realtime Database | نظام إدارة المحل التجاري</p>
+        </div>
+    </div>
+    
+    <!-- Modal لإضافة/تعديل القطعة -->
+    <div class="modal" id="itemModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">إضافة قطعة جديدة</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            <form id="itemForm">
+                <div class="form-group">
+                    <label for="itemName">اسم القطعة *</label>
+                    <input type="text" id="itemName" required>
+                </div>
+                <div class="form-group">
+                    <label for="purchasePrice">سعر الشراء ($) *</label>
+                    <input type="number" id="purchasePrice" min="0" step="0.01" required>
+                    <div class="currency-info">
+                        <span id="purchasePriceSecondary">0.00 عملة ثانوية</span>
+                        <span>سعر الصرف: <span id="purchaseExchangeRate">1</span></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="salePrice">سعر البيع ($) *</label>
+                    <input type="number" id="salePrice" min="0" step="0.01" required>
+                    <div class="currency-info">
+                        <span id="salePriceSecondary">0.00 عملة ثانوية</span>
+                        <span>سعر الصرف: <span id="saleExchangeRate">1</span></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">الكمية المتوفرة *</label>
+                    <input type="number" id="quantity" min="0" step="1" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" id="cancelBtn">إلغاء</button>
+                    <button type="submit" class="save-btn" id="saveBtn">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal للإعدادات -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>إعدادات العملة</h2>
+                <button class="close-modal" id="closeSettingsModal">&times;</button>
+            </div>
+            <form id="settingsForm">
+                <div class="form-group">
+                    <label for="secondaryCurrencyName">اسم العملة الثانوية</label>
+                    <input type="text" id="secondaryCurrencyName" placeholder="مثال: ريال سعودي" value="ريال سعودي">
+                </div>
+                <div class="form-group">
+                    <label for="secondaryCurrencySymbol">رمز العملة الثانوية</label>
+                    <input type="text" id="secondaryCurrencySymbol" placeholder="مثال: ﷼" value="﷼">
+                </div>
+                <div class="form-group">
+                    <label for="exchangeRate">سعر صرف العملة (لكل 1 دولار)</label>
+                    <input type="number" id="exchangeRate" min="0.01" step="0.01" value="3.75" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" id="cancelSettingsBtn">إلغاء</button>
+                    <button type="submit" class="save-btn" id="saveSettingsBtn">حفظ الإعدادات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // تكوين Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBeJ0sbdCqz60a-yqzuZSt6QstDhR3TRtM",
+            authDomain: "profit-zone-e03c6.firebaseapp.com",
+            databaseURL: "https://profit-zone-e03c6-default-rtdb.firebaseio.com",
+            projectId: "profit-zone-e03c6",
+            storageBucket: "profit-zone-e03c6.firebasestorage.app",
+            messagingSenderId: "306955059136",
+            appId: "1:306955059136:web:a450be9721f4a2db0d1225"
+        };
+
+        // تهيئة Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        // عناصر DOM
+        const itemsTableBody = document.getElementById('itemsTableBody');
+        const searchInput = document.getElementById('searchInput');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const itemModal = document.getElementById('itemModal');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeModal = document.getElementById('closeModal');
+        const closeSettingsModal = document.getElementById('closeSettingsModal');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+        const itemForm = document.getElementById('itemForm');
+        const settingsForm = document.getElementById('settingsForm');
+        const modalTitle = document.getElementById('modalTitle');
+        const itemNameInput = document.getElementById('itemName');
+        const purchasePriceInput = document.getElementById('purchasePrice');
+        const salePriceInput = document.getElementById('salePrice');
+        const quantityInput = document.getElementById('quantity');
+        const secondaryCurrencyNameInput = document.getElementById('secondaryCurrencyName');
+        const secondaryCurrencySymbolInput = document.getElementById('secondaryCurrencySymbol');
+        const exchangeRateInput = document.getElementById('exchangeRate');
+        const purchasePriceSecondary = document.getElementById('purchasePriceSecondary');
+        const salePriceSecondary = document.getElementById('salePriceSecondary');
+        const purchaseExchangeRate = document.getElementById('purchaseExchangeRate');
+        const saleExchangeRate = document.getElementById('saleExchangeRate');
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+        const togglePurchasePrice = document.getElementById('togglePurchasePrice');
+        const toggleProfitPercent = document.getElementById('toggleProfitPercent');
+        const totalCapitalPrimary = document.getElementById('totalCapitalPrimary');
+        const totalCapitalSecondary = document.getElementById('totalCapitalSecondary');
+        const totalProfitPrimary = document.getElementById('totalProfitPrimary');
+        const totalProfitSecondary = document.getElementById('totalProfitSecondary');
+        
+        // المتغيرات
+        let items = [];
+        let currentItemId = null;
+        let isEditing = false;
+        let isPurchasePriceVisible = false;
+        let isProfitPercentVisible = false;
+        
+        // إعدادات العملة الافتراضية
+        let currencySettings = {
+            secondaryCurrencyName: "ريال سعودي",
+            secondaryCurrencySymbol: "﷼",
+            exchangeRate: 3.75
+        };
+        
+        // دالة حساب نسبة الربح
+        function calculateProfitPercent(purchasePrice, salePrice) {
+            if (purchasePrice === 0) return salePrice > 0 ? 100 : 0;
+            return ((salePrice - purchasePrice) / purchasePrice * 100).toFixed(2);
+        }
+        
+        // دالة تحويل العملة
+        function convertToSecondaryCurrency(amount) {
+            return (amount * currencySettings.exchangeRate).toFixed(2);
+        }
+        
+        // دالة تحديث رأس المال في الشريط السفلي
+        function updateTotalCapital() {
+            let totalCapital = 0;
+            let totalPotentialProfit = 0;
+            
+            items.forEach(item => {
+                totalCapital += item.purchasePrice * item.quantity;
+                totalPotentialProfit += (item.salePrice - item.purchasePrice) * item.quantity;
+            });
+            
+            const totalCapitalSecondary = convertToSecondaryCurrency(totalCapital);
+            const totalProfitSecondary = convertToSecondaryCurrency(totalPotentialProfit);
+            
+            // تحديث الشريط السفلي
+            totalCapitalPrimary.textContent = `$${totalCapital.toFixed(2)}`;
+            totalCapitalSecondary.textContent = `${totalCapitalSecondary} ${currencySettings.secondaryCurrencySymbol}`;
+            
+            totalProfitPrimary.textContent = `$${totalPotentialProfit.toFixed(2)}`;
+            totalProfitSecondary.textContent = `${totalProfitSecondary} ${currencySettings.secondaryCurrencySymbol}`;
+        }
+        
+        // دالة تحديث الأسعار الثانوية في نموذج الإضافة/التعديل
+        function updateSecondaryPrices() {
+            const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            const salePrice = parseFloat(salePriceInput.value) || 0;
+            
+            purchasePriceSecondary.textContent = `${convertToSecondaryCurrency(purchasePrice)} ${currencySettings.secondaryCurrencySymbol}`;
+            salePriceSecondary.textContent = `${convertToSecondaryCurrency(salePrice)} ${currencySettings.secondaryCurrencySymbol}`;
+            purchaseExchangeRate.textContent = currencySettings.exchangeRate;
+            saleExchangeRate.textContent = currencySettings.exchangeRate;
+        }
+        
+        // دالة تبديل رؤية سعر الشراء
+        function togglePurchasePriceVisibility() {
+            isPurchasePriceVisible = !isPurchasePriceVisible;
+            
+            // تحديث أيقونة العين
+            const eyeIcon = togglePurchasePrice.querySelector('i');
+            if (isPurchasePriceVisible) {
+                eyeIcon.className = 'fas fa-eye-slash';
+                togglePurchasePrice.title = 'إخفاء سعر الشراء';
+            } else {
+                eyeIcon.className = 'fas fa-eye';
+                togglePurchasePrice.title = 'إظهار سعر الشراء';
+            }
+            
+            // تطبيق الفئة على خلايا سعر الشراء في الجدول
+            const purchasePriceCells = document.querySelectorAll('.purchase-price .primary-price, .purchase-price .secondary-price');
+            purchasePriceCells.forEach(cell => {
+                if (isPurchasePriceVisible) {
+                    cell.classList.remove('hidden-price');
+                    cell.classList.add('visible-price');
+                } else {
+                    cell.classList.remove('visible-price');
+                    cell.classList.add('hidden-price');
+                }
+            });
+        }
+        
+        // دالة تبديل رؤية نسبة الربح
+        function toggleProfitPercentVisibility() {
+            isProfitPercentVisible = !isProfitPercentVisible;
+            
+            // تحديث أيقونة العين
+            const eyeIcon = toggleProfitPercent.querySelector('i');
+            if (isProfitPercentVisible) {
+                eyeIcon.className = 'fas fa-eye-slash';
+                toggleProfitPercent.title = 'إخفاء نسبة الربح';
+            } else {
+                eyeIcon.className = 'fas fa-eye';
+                toggleProfitPercent.title = 'إظهار نسبة الربح';
+            }
+            
+            // تطبيق الفئة على خلايا نسبة الربح في الجدول
+            const profitPercentCells = document.querySelectorAll('.profit-percent');
+            profitPercentCells.forEach(cell => {
+                if (isProfitPercentVisible) {
+                    cell.classList.remove('hidden-profit');
+                    cell.classList.add('visible-profit');
+                } else {
+                    cell.classList.remove('visible-profit');
+                    cell.classList.add('hidden-profit');
+                }
+            });
+        }
+        
+        // دالة عرض العناصر
+        function displayItems(filteredItems = items) {
+            // ترتيب العناصر أبجدياً حسب الاسم
+            const sortedItems = [...filteredItems].sort((a, b) => 
+                a.name.localeCompare(b.name, 'ar')
+            );
+            
+            if (sortedItems.length === 0) {
+                itemsTableBody.innerHTML = `
+                    <tr class="empty-state">
+                        <td colspan="6">
+                            <i class="fas fa-box-open"></i>
+                            <h3>لا توجد قطع في المخزون</h3>
+                            <p>انقر على زر "إضافة قطعة جديدة" لبدء إدارة المخزون</p>
+                        </td>
+                    </tr>
+                `;
+                
+                // تحديث رأس المال
+                updateTotalCapital();
+                return;
+            }
+            
+            let tableHTML = '';
+            
+            sortedItems.forEach(item => {
+                const profitPercent = calculateProfitPercent(item.purchasePrice, item.salePrice);
+                const profitClass = profitPercent >= 0 ? 'profit-positive' : 'profit-negative';
+                const profitSign = profitPercent >= 0 ? '+' : '';
+                
+                // حساب الأسعار بالعملة الثانوية
+                const purchasePriceSecondary = convertToSecondaryCurrency(item.purchasePrice);
+                const salePriceSecondary = convertToSecondaryCurrency(item.salePrice);
+                
+                // تحديد فئات الرؤية للأسعار
+                const purchasePriceClass = isPurchasePriceVisible ? 'visible-price' : 'hidden-price';
+                const profitPercentClass = isProfitPercentVisible ? 'visible-profit' : 'hidden-profit';
+                
+                tableHTML += `
+                    <tr data-id="${item.id}">
+                        <td class="item-name">${item.name}</td>
+                        <td class="purchase-price">
+                            <div class="price-container">
+                                <div class="primary-price ${purchasePriceClass}">$${item.purchasePrice.toFixed(2)}</div>
+                                <div class="secondary-price ${purchasePriceClass}">${purchasePriceSecondary} ${currencySettings.secondaryCurrencySymbol}</div>
+                            </div>
+                        </td>
+                        <td class="sale-price">
+                            <div class="price-container">
+                                <div class="primary-price">$${item.salePrice.toFixed(2)}</div>
+                                <div class="secondary-price">${salePriceSecondary} ${currencySettings.secondaryCurrencySymbol}</div>
+                            </div>
+                        </td>
+                        <td><span class="profit-percent ${profitClass} ${profitPercentClass}">${profitSign}${profitPercent}%</span></td>
+                        <td>
+                            <div class="quantity-controls">
+                                <button class="quantity-btn decrease-btn" data-id="${item.id}">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity-value">${item.quantity}</span>
+                                <button class="quantity-btn increase-btn" data-id="${item.id}">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="edit-btn" data-id="${item.id}">تعديل</button>
+                                <button class="delete-btn" data-id="${item.id}">حذف</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            itemsTableBody.innerHTML = tableHTML;
+            
+            // تحديث رأس المال
+            updateTotalCapital();
+            
+            // إضافة مستمعي الأحداث للأزرار
+            document.querySelectorAll('.increase-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const itemId = e.currentTarget.getAttribute('data-id');
+                    updateQuantity(itemId, 1);
+                });
+            });
+            
+            document.querySelectorAll('.decrease-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const itemId = e.currentTarget.getAttribute('data-id');
+                    updateQuantity(itemId, -1);
+                });
+            });
+            
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const itemId = e.currentTarget.getAttribute('data-id');
+                    editItem(itemId);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const itemId = e.currentTarget.getAttribute('data-id');
+                    deleteItem(itemId);
+                });
+            });
+        }
+        
+        // دالة تحديث الكمية
+        function updateQuantity(itemId, change) {
+            const itemIndex = items.findIndex(item => item.id === itemId);
+            if (itemIndex === -1) return;
+            
+            const newQuantity = items[itemIndex].quantity + change;
+            if (newQuantity < 0) return;
+            
+            // تحديث في Firebase
+            database.ref('items/' + itemId).update({
+                quantity: newQuantity
+            }).then(() => {
+                // تم التحديث بنجاح
+                items[itemIndex].quantity = newQuantity;
+                displayItems();
+            }).catch(error => {
+                console.error("خطأ في تحديث الكمية:", error);
+                alert("حدث خطأ أثناء تحديث الكمية");
+            });
+        }
+        
+        // دالة تحرير القطعة
+        function editItem(itemId) {
+            const item = items.find(item => item.id === itemId);
+            if (!item) return;
+            
+            currentItemId = itemId;
+            isEditing = true;
+            
+            // تعبئة الحقول في النموذج
+            itemNameInput.value = item.name;
+            purchasePriceInput.value = item.purchasePrice;
+            salePriceInput.value = item.salePrice;
+            quantityInput.value = item.quantity;
+            
+            // تحديث الأسعار الثانوية
+            updateSecondaryPrices();
+            
+            // تغيير عنوان النموذج
+            modalTitle.textContent = 'تعديل القطعة';
+            
+            // عرض النموذج
+            itemModal.style.display = 'flex';
+        }
+        
+        // دالة حذف القطعة
+        function deleteItem(itemId) {
+            if (!confirm('هل أنت متأكد من حذف هذه القطعة؟')) return;
+            
+            database.ref('items/' + itemId).remove().then(() => {
+                // إزالة من المصفوفة المحلية
+                items = items.filter(item => item.id !== itemId);
+                displayItems();
+            }).catch(error => {
+                console.error("خطأ في حذف القطعة:", error);
+                alert("حدث خطأ أثناء حذف القطعة");
+            });
+        }
+        
+        // دالة لإضافة قطعة جديدة
+        function addItem() {
+            currentItemId = null;
+            isEditing = false;
+            itemForm.reset();
+            modalTitle.textContent = 'إضافة قطعة جديدة';
+            
+            // تحديث الأسعار الثانوية
+            updateSecondaryPrices();
+            
+            itemModal.style.display = 'flex';
+        }
+        
+        // دالة لحفظ القطعة
+        function saveItem(e) {
+            e.preventDefault();
+            
+            // الحصول على القيم من النموذج
+            const name = itemNameInput.value.trim();
+            const purchasePrice = parseFloat(purchasePriceInput.value);
+            const salePrice = parseFloat(salePriceInput.value);
+            const quantity = parseInt(quantityInput.value);
+            
+            // التحقق من صحة البيانات
+            if (!name || purchasePrice < 0 || salePrice < 0 || quantity < 0 || isNaN(purchasePrice) || isNaN(salePrice) || isNaN(quantity)) {
+                alert('يرجى تعبئة جميع الحقول بشكل صحيح');
+                return;
+            }
+            
+            const itemData = {
+                name,
+                purchasePrice,
+                salePrice,
+                quantity,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+            
+            if (isEditing) {
+                // تحديث القطعة الحالية
+                database.ref('items/' + currentItemId).update(itemData).then(() => {
+                    // تحديث المصفوفة المحلية
+                    const itemIndex = items.findIndex(item => item.id === currentItemId);
+                    if (itemIndex !== -1) {
+                        items[itemIndex] = { ...items[itemIndex], ...itemData };
+                    }
+                    
+                    displayItems();
+                    itemModal.style.display = 'none';
+                }).catch(error => {
+                    console.error("خطأ في تحديث القطعة:", error);
+                    alert("حدث خطأ أثناء تحديث القطعة");
+                });
+            } else {
+                // إضافة قطعة جديدة
+                const newItemRef = database.ref('items').push();
+                const newItemId = newItemRef.key;
+                
+                itemData.createdAt = firebase.database.ServerValue.TIMESTAMP;
+                
+                newItemRef.set(itemData).then(() => {
+                    // إضافة إلى المصفوفة المحلية
+                    items.push({
+                        id: newItemId,
+                        ...itemData
+                    });
+                    
+                    displayItems();
+                    itemModal.style.display = 'none';
+                }).catch(error => {
+                    console.error("خطأ في إضافة القطعة:", error);
+                    alert("حدث خطأ أثناء إضافة القطعة");
+                });
+            }
+        }
+        
+        // دالة حفظ إعدادات العملة
+        function saveCurrencySettings(e) {
+            e.preventDefault();
+            
+            const secondaryCurrencyName = secondaryCurrencyNameInput.value.trim();
+            const secondaryCurrencySymbol = secondaryCurrencySymbolInput.value.trim();
+            const exchangeRate = parseFloat(exchangeRateInput.value);
+            
+            if (!secondaryCurrencyName || !secondaryCurrencySymbol || isNaN(exchangeRate) || exchangeRate <= 0) {
+                alert('يرجى تعبئة جميع الحقول بشكل صحيح');
+                return;
+            }
+            
+            // تحديث إعدادات العملة
+            currencySettings = {
+                secondaryCurrencyName,
+                secondaryCurrencySymbol,
+                exchangeRate
+            };
+            
+            // حفظ الإعدادات في Firebase
+            database.ref('currencySettings').set(currencySettings).then(() => {
+                // تحديث واجهة المستخدم
+                displayItems();
+                updateSecondaryPrices();
+                updateTotalCapital();
+                settingsModal.style.display = 'none';
+                alert('تم حفظ إعدادات العملة بنجاح');
+            }).catch(error => {
+                console.error("خطأ في حفظ إعدادات العملة:", error);
+                alert("حدث خطأ أثناء حفظ إعدادات العملة");
+            });
+        }
+        
+        // دالة تحميل إعدادات العملة
+        function loadCurrencySettings() {
+            database.ref('currencySettings').once('value').then((snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    currencySettings = data;
+                    
+                    // تحديث حقول الإعدادات
+                    secondaryCurrencyNameInput.value = currencySettings.secondaryCurrencyName;
+                    secondaryCurrencySymbolInput.value = currencySettings.secondaryCurrencySymbol;
+                    exchangeRateInput.value = currencySettings.exchangeRate;
+                    
+                    // تحديث واجهة المستخدم
+                    updateSecondaryPrices();
+                    updateTotalCapital();
+                }
+            }).catch(error => {
+                console.error("خطأ في جلب إعدادات العملة:", error);
+            });
+        }
+        
+        // دالة البحث
+        function searchItems() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredItems = items.filter(item => 
+                item.name.toLowerCase().includes(searchTerm)
+            );
+            displayItems(filteredItems);
+        }
+        
+        // دالة جلب البيانات من Firebase
+        function loadItems() {
+            database.ref('items').on('value', (snapshot) => {
+                items = [];
+                const data = snapshot.val();
+                
+                if (data) {
+                    Object.keys(data).forEach(key => {
+                        items.push({
+                            id: key,
+                            ...data[key]
+                        });
+                    });
+                }
+                
+                displayItems();
+            }, (error) => {
+                console.error("خطأ في جلب البيانات:", error);
+                itemsTableBody.innerHTML = `
+                    <tr class="empty-state">
+                        <td colspan="6">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>حدث خطأ في جلب البيانات</h3>
+                            <p>يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى</p>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        
+        // إضافة مستمعي الأحداث
+        addItemBtn.addEventListener('click', addItem);
+        settingsBtn.addEventListener('click', () => {
+            settingsModal.style.display = 'flex';
+        });
+        closeModal.addEventListener('click', () => {
+            itemModal.style.display = 'none';
+        });
+        closeSettingsModal.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+        });
+        cancelBtn.addEventListener('click', () => {
+            itemModal.style.display = 'none';
+        });
+        cancelSettingsBtn.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+        });
+        itemForm.addEventListener('submit', saveItem);
+        settingsForm.addEventListener('submit', saveCurrencySettings);
+        searchInput.addEventListener('input', searchItems);
+        togglePurchasePrice.addEventListener('click', togglePurchasePriceVisibility);
+        toggleProfitPercent.addEventListener('click', toggleProfitPercentVisibility);
+        
+        // تحديث الأسعار الثانوية عند تغيير قيمة الأسعار
+        purchasePriceInput.addEventListener('input', updateSecondaryPrices);
+        salePriceInput.addEventListener('input', updateSecondaryPrices);
+        
+        // إغلاق النموذج عند النقر خارج المحتوى
+        window.addEventListener('click', (e) => {
+            if (e.target === itemModal) {
+                itemModal.style.display = 'none';
+            }
+            if (e.target === settingsModal) {
+                settingsModal.style.display = 'none';
+            }
+        });
+        
+        // تحميل البيانات عند بدء التشغيل
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCurrencySettings();
+            loadItems();
+            updateSecondaryPrices();
+            
+            // تعيين عناوين للأزرار
+            togglePurchasePrice.title = 'إظهار سعر الشراء';
+            toggleProfitPercent.title = 'إظهار نسبة الربح';
+        });
+    </script>
+</body>
+</html>
