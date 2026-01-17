@@ -865,6 +865,26 @@
         .syncing-status {
             background-color: rgba(52, 152, 219, 0.9);
         }
+        
+        /* استايلات جديدة للترقيم التسلسلي */
+        .serial-number {
+            text-align: center;
+            font-weight: bold;
+            color: #4a6fa5;
+            font-size: 1.1rem;
+            width: 50px;
+        }
+        
+        /* تعديل عرض الجدول ليتسع للعمود الجديد */
+        th:first-child {
+            width: 70px;
+            min-width: 70px;
+        }
+        
+        td:first-child {
+            width: 70px;
+            min-width: 70px;
+        }
     </style>
 </head>
 <body>
@@ -888,6 +908,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>اسم القطعة</th>
                             <th>
                                 سعر الشراء
@@ -908,7 +929,7 @@
                     </thead>
                     <tbody id="itemsTableBody">
                         <tr class="loading">
-                            <td colspan="6">جاري تحميل البيانات المحلية...</td>
+                            <td colspan="7">جاري تحميل البيانات المحلية...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -918,6 +939,16 @@
         <div class="capital-footer">
             <div class="capital-container">
                 <div class="capital-info">
+                    <div class="capital-item">
+                        <div class="capital-label">الأصناف:</div>
+                        <div class="capital-value" id="totalCategories">0</div>
+                        <div class="capital-secondary">عدد الأصناف</div>
+                    </div>
+                    <div class="capital-item">
+                        <div class="capital-label">المنتجات:</div>
+                        <div class="capital-value" id="totalProducts">0</div>
+                        <div class="capital-secondary">عدد القطع الكلي</div>
+                    </div>
                     <div class="capital-item">
                         <div class="capital-label">رأس المال الكلي:</div>
                         <div class="capital-value" id="totalCapitalPrimary">$0.00</div>
@@ -1061,6 +1092,8 @@
         const totalCapitalSecondary = document.getElementById('totalCapitalSecondary');
         const totalProfitPrimary = document.getElementById('totalProfitPrimary');
         const totalProfitSecondary = document.getElementById('totalProfitSecondary');
+        const totalCategories = document.getElementById('totalCategories');
+        const totalProducts = document.getElementById('totalProducts');
         const connectionStatus = document.getElementById('connectionStatus');
         
         // المتغيرات
@@ -1445,14 +1478,16 @@
             return (amount * currencySettings.exchangeRate).toFixed(2);
         }
         
-        // دالة تحديث رأس المال في الشريط السفلي
+        // دالة تحديث رأس المال والإحصائيات في الشريط السفلي
         function updateTotalCapital() {
             let totalCapital = 0;
             let totalPotentialProfit = 0;
+            let totalItemsCount = 0;
             
             items.forEach(item => {
                 totalCapital += item.purchasePrice * item.quantity;
                 totalPotentialProfit += (item.salePrice - item.purchasePrice) * item.quantity;
+                totalItemsCount += item.quantity;
             });
             
             const totalCapitalSecondary = convertToSecondaryCurrency(totalCapital);
@@ -1464,6 +1499,10 @@
             
             totalProfitPrimary.textContent = `$${totalPotentialProfit.toFixed(2)}`;
             totalProfitSecondary.textContent = `${totalProfitSecondary} ${currencySettings.secondaryCurrencySymbol}`;
+            
+            // تحديث عدد الأصناف والمنتجات
+            totalCategories.textContent = items.length;
+            totalProducts.textContent = totalItemsCount;
         }
         
         // دالة تحديث الأسعار الثانوية في نموذج الإضافة/التعديل
@@ -1541,7 +1580,7 @@
             if (sortedItems.length === 0) {
                 itemsTableBody.innerHTML = `
                     <tr class="empty-state">
-                        <td colspan="6">
+                        <td colspan="7">
                             <i class="fas fa-box-open"></i>
                             <h3>لا توجد قطع في المخزون</h3>
                             <p>انقر على زر "إضافة قطعة جديدة" لبدء إدارة المخزون</p>
@@ -1549,12 +1588,13 @@
                     </tr>
                 `;
                 
-                // تحديث رأس المال
+                // تحديث رأس المال والإحصائيات
                 updateTotalCapital();
                 return;
             }
             
             let tableHTML = '';
+            let serialNumber = 1;
             
             sortedItems.forEach(item => {
                 const profitPercent = calculateProfitPercent(item.purchasePrice, item.salePrice);
@@ -1571,6 +1611,7 @@
                 
                 tableHTML += `
                     <tr data-id="${item.id}">
+                        <td class="serial-number">${serialNumber}</td>
                         <td class="item-name">${item.name}</td>
                         <td class="purchase-price">
                             <div class="price-container">
@@ -1604,11 +1645,12 @@
                         </td>
                     </tr>
                 `;
+                serialNumber++;
             });
             
             itemsTableBody.innerHTML = tableHTML;
             
-            // تحديث رأس المال
+            // تحديث رأس المال والإحصائيات
             updateTotalCapital();
             
             // إضافة مستمعي الأحداث للأزرار
@@ -1961,7 +2003,7 @@
                 // عرض رسالة خطأ للمستخدم
                 itemsTableBody.innerHTML = `
                     <tr class="empty-state">
-                        <td colspan="6">
+                        <td colspan="7">
                             <i class="fas fa-exclamation-triangle"></i>
                             <h3>حدث خطأ في تحميل البيانات</h3>
                             <p>يرجى تحديث الصفحة والمحاولة مرة أخرى</p>
