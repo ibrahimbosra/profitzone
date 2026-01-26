@@ -1371,13 +1371,13 @@
         let currentFilter = 'all';
         
         // ============================================
-        // IndexedDB Functions
+        // IndexedDB Functions - إصدار محسن
         // ============================================
         
         // فتح أو إنشاء قاعدة بيانات IndexedDB
         function openIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('productsDB', 3); // زيادة الإصدار إلى 3
+                const request = indexedDB.open('StoreManagementDB', 4); // زيادة الإصدار إلى 4
                 
                 request.onerror = (event) => {
                     console.error("خطأ في فتح IndexedDB:", event.target.error);
@@ -1394,7 +1394,7 @@
                     const db = event.target.result;
                     const oldVersion = event.oldVersion;
                     
-                    // إنشاء Object Store إذا لم يكن موجودًا
+                    // إنشاء Object Store للمنتجات إذا لم يكن موجودًا
                     if (!db.objectStoreNames.contains('products')) {
                         const objectStore = db.createObjectStore('products', { keyPath: 'id' });
                         console.log("Object Store 'products' تم إنشاؤه");
@@ -1408,11 +1408,17 @@
                     
                     // إنشاء Object Store لسجل العمليات إذا لم يكن موجودًا
                     if (!db.objectStoreNames.contains('activityLog')) {
-                        const logStore = db.createObjectStore('activityLog', { keyPath: 'id', autoIncrement: true });
+                        const logStore = db.createObjectStore('activityLog', { keyPath: 'activityId' }); // استخدام activityId كـ keyPath
                         logStore.createIndex('timestamp', 'timestamp', { unique: false });
                         logStore.createIndex('actionType', 'actionType', { unique: false });
-                        logStore.createIndex('activityId', 'activityId', { unique: true }); // إضافة فهرس فريد
-                        console.log("Object Store 'activityLog' تم إنشاؤه");
+                        console.log("Object Store 'activityLog' تم إنشاؤه مع activityId كـ keyPath");
+                    } else if (oldVersion < 4) {
+                        // إذا كنا نقوم بالترقية، نحذف Object Store القديم وننشئه من جديد
+                        db.deleteObjectStore('activityLog');
+                        const logStore = db.createObjectStore('activityLog', { keyPath: 'activityId' });
+                        logStore.createIndex('timestamp', 'timestamp', { unique: false });
+                        logStore.createIndex('actionType', 'actionType', { unique: false });
+                        console.log("Object Store 'activityLog' تم إعادة إنشاؤه مع activityId كـ keyPath");
                     }
                 };
             });
@@ -1545,12 +1551,12 @@
         }
         
         // ============================================
-        // سجل العمليات Functions
+        // سجل العمليات Functions - محسنة
         // ============================================
         
         // إنشاء معرف فريد للنشاط
         function generateActivityId() {
-            return 'activity_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) + '_' + performance.now().toString(36).replace('.', '');
+            return 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
         
         // إضافة عملية إلى السجل
@@ -1573,14 +1579,16 @@
             // حفظ في IndexedDB
             try {
                 await saveActivityToIndexedDB(activity);
+                console.log(`تم حفظ العملية في السجل المحلي: ${details}`);
             } catch (error) {
-                console.error("خطأ في حفظ العملية في سجل العمليات:", error);
+                console.error("خطأ في حفظ العملية في سجل العمليات المحلي:", error);
             }
             
             // محاولة المزامنة مع Firebase
             try {
                 if (database) {
                     await syncActivityToFirebase(activity);
+                    console.log(`تم مزامنة العملية مع Firebase: ${details}`);
                 }
             } catch (error) {
                 console.error("خطأ في مزامنة العملية مع Firebase:", error);
@@ -1603,43 +1611,17 @@
                 const transaction = db.transaction(['activityLog'], 'readwrite');
                 const objectStore = transaction.objectStore('activityLog');
                 
-                // التحقق من وجود العملية بالفعل باستخدام activityId
-                const index = objectStore.index('activityId');
-                const checkRequest = index.get(activity.activityId);
+                // استخدام activityId مباشرةً
+                const request = objectStore.put(activity);
                 
-                checkRequest.onerror = (event) => {
-                    console.error("خطأ في التحقق من وجود العملية في IndexedDB:", event.target.error);
-                    // إذا حدث خطأ في التحقق، نستمر في الإضافة
-                    const addRequest = objectStore.add(activity);
-                    
-                    addRequest.onerror = (event) => {
-                        console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
-                        reject(event.target.error);
-                    };
-                    
-                    addRequest.onsuccess = (event) => {
-                        resolve(event.target.result);
-                    };
+                request.onerror = (event) => {
+                    console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
+                    reject(event.target.error);
                 };
                 
-                checkRequest.onsuccess = (event) => {
-                    if (event.target.result) {
-                        // العملية موجودة بالفعل، لا نضيفها مرة أخرى
-                        console.log(`العملية ${activity.activityId} موجودة بالفعل، تم تخطي الإضافة`);
-                        resolve(null);
-                    } else {
-                        // العملية غير موجودة، نضيفها
-                        const addRequest = objectStore.add(activity);
-                        
-                        addRequest.onerror = (event) => {
-                            console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
-                            reject(event.target.error);
-                        };
-                        
-                        addRequest.onsuccess = (event) => {
-                            resolve(event.target.result);
-                        };
-                    }
+                request.onsuccess = (event) => {
+                    console.log(`تم حفظ العملية ${activity.activityId} في IndexedDB`);
+                    resolve(event.target.result);
                 };
             });
         }
@@ -1670,6 +1652,7 @@
                         activities.push(cursor.value);
                         cursor.continue();
                     } else {
+                        console.log(`تم تحميل ${activities.length} عملية من السجل المحلي`);
                         resolve(activities);
                     }
                 };
@@ -1694,6 +1677,7 @@
                 };
                 
                 request.onsuccess = (event) => {
+                    console.log("تم حذف سجل العمليات من IndexedDB");
                     resolve(true);
                 };
             });
@@ -1716,7 +1700,7 @@
             }
         }
         
-        // تنسيق التاريخ والوقت (تعديل: استخدام التوقيت المحلي فقط)
+        // تنسيق التاريخ والوقت
         function formatDateTime(date) {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -1815,29 +1799,37 @@
                 
                 if (firebaseLog) {
                     // تحويل بيانات Firebase إلى مصفوفة
-                    const firebaseActivities = Object.keys(firebaseLog).map(key => ({
-                        id: key,
-                        ...firebaseLog[key]
-                    }));
+                    const firebaseActivities = Object.values(firebaseLog);
                     
                     // ترتيب حسب الوقت (الأحدث أولاً)
                     firebaseActivities.sort((a, b) => b.timestamp - a.timestamp);
                     
+                    console.log(`تم تحميل ${firebaseActivities.length} عملية من Firebase`);
+                    
                     // حفظ في IndexedDB مع التحقق من عدم التكرار
+                    let newActivitiesCount = 0;
                     for (const activity of firebaseActivities) {
-                        const { id, ...activityData } = activity;
-                        
                         // التحقق مما إذا كان activityId موجودًا بالفعل
-                        const existingActivity = activityLog.find(a => a.activityId === activityData.activityId);
+                        const existingActivity = activityLog.find(a => a.activityId === activity.activityId);
                         if (!existingActivity) {
-                            await saveActivityToIndexedDB(activityData);
+                            try {
+                                await saveActivityToIndexedDB(activity);
+                                newActivitiesCount++;
+                            } catch (error) {
+                                console.error(`خطأ في حفظ العملية ${activity.activityId}:`, error);
+                            }
                         }
                     }
                     
-                    console.log(`تمت مزامنة سجل العمليات من Firebase`);
+                    if (newActivitiesCount > 0) {
+                        console.log(`تمت إضافة ${newActivitiesCount} عملية جديدة من Firebase`);
+                    }
                     
                     // إعادة تحميل السجل من IndexedDB
                     activityLog = await readActivityLogFromIndexedDB();
+                    console.log(`إجمالي العمليات بعد المزامنة: ${activityLog.length}`);
+                } else {
+                    console.log("لا توجد عمليات في Firebase");
                 }
             } catch (error) {
                 console.error("خطأ في مزامنة سجل العمليات من Firebase:", error);
@@ -1853,7 +1845,7 @@
             
             try {
                 // استخدام activityId كمعرف فريد في Firebase
-                const activityKey = activity.activityId.replace(/[.#$\[\]]/g, '_'); // استبدال الأحخاص الخاصة
+                const activityKey = activity.activityId.replace(/[.#$\[\]]/g, '_'); // استبدال الأحرف الخاصة
                 await database.ref('activityLog/' + activityKey).set(activity);
                 return true;
             } catch (error) {
@@ -2576,13 +2568,16 @@
             try {
                 // 1. فتح IndexedDB
                 await openIndexedDB();
+                console.log("تم فتح IndexedDB بنجاح");
                 
                 // 2. تحميل المنتجات من IndexedDB وعرضها
                 items = await readAllProductsFromIndexedDB();
+                console.log(`تم تحميل ${items.length} منتج من التخزين المحلي`);
                 displayItems();
                 
                 // 3. تحميل سجل العمليات
                 activityLog = await readActivityLogFromIndexedDB();
+                console.log(`تم تحميل ${activityLog.length} عملية من السجل المحلي`);
                 
                 // تحديث حالة الاتصال
                 updateConnectionStatus('offline-status', 'تم تحميل البيانات المحلية');
@@ -2631,6 +2626,7 @@
                             <i class="fas fa-exclamation-triangle"></i>
                             <h3>حدث خطأ في تحميل البيانات</h3>
                             <p>يرجى تحديث الصفحة والمحاولة مرة أخرى</p>
+                            <p>تفاصيل الخطأ: ${error.message || error}</p>
                         </td>
                     </tr>
                 `;
