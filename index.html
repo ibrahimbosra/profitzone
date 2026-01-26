@@ -1377,7 +1377,7 @@
         // فتح أو إنشاء قاعدة بيانات IndexedDB
         function openIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('productsDB', 2);
+                const request = indexedDB.open('productsDB', 3); // زيادة الإصدار إلى 3
                 
                 request.onerror = (event) => {
                     console.error("خطأ في فتح IndexedDB:", event.target.error);
@@ -1411,6 +1411,7 @@
                         const logStore = db.createObjectStore('activityLog', { keyPath: 'id', autoIncrement: true });
                         logStore.createIndex('timestamp', 'timestamp', { unique: false });
                         logStore.createIndex('actionType', 'actionType', { unique: false });
+                        logStore.createIndex('activityId', 'activityId', { unique: true }); // إضافة فهرس فريد
                         console.log("Object Store 'activityLog' تم إنشاؤه");
                     }
                 };
@@ -1547,11 +1548,18 @@
         // سجل العمليات Functions
         // ============================================
         
+        // إنشاء معرف فريد للنشاط
+        function generateActivityId() {
+            return 'activity_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) + '_' + performance.now().toString(36).replace('.', '');
+        }
+        
         // إضافة عملية إلى السجل
         async function addToActivityLog(actionType, details, itemData = null) {
             const timestamp = new Date();
+            const activityId = generateActivityId();
             
             const activity = {
+                activityId, // معرف فريد
                 actionType,
                 details,
                 timestamp: timestamp.getTime(),
@@ -1594,15 +1602,44 @@
                 
                 const transaction = db.transaction(['activityLog'], 'readwrite');
                 const objectStore = transaction.objectStore('activityLog');
-                const request = objectStore.add(activity);
                 
-                request.onerror = (event) => {
-                    console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
-                    reject(event.target.error);
+                // التحقق من وجود العملية بالفعل باستخدام activityId
+                const index = objectStore.index('activityId');
+                const checkRequest = index.get(activity.activityId);
+                
+                checkRequest.onerror = (event) => {
+                    console.error("خطأ في التحقق من وجود العملية في IndexedDB:", event.target.error);
+                    // إذا حدث خطأ في التحقق، نستمر في الإضافة
+                    const addRequest = objectStore.add(activity);
+                    
+                    addRequest.onerror = (event) => {
+                        console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
+                        reject(event.target.error);
+                    };
+                    
+                    addRequest.onsuccess = (event) => {
+                        resolve(event.target.result);
+                    };
                 };
                 
-                request.onsuccess = (event) => {
-                    resolve(event.target.result);
+                checkRequest.onsuccess = (event) => {
+                    if (event.target.result) {
+                        // العملية موجودة بالفعل، لا نضيفها مرة أخرى
+                        console.log(`العملية ${activity.activityId} موجودة بالفعل، تم تخطي الإضافة`);
+                        resolve(null);
+                    } else {
+                        // العملية غير موجودة، نضيفها
+                        const addRequest = objectStore.add(activity);
+                        
+                        addRequest.onerror = (event) => {
+                            console.error("خطأ في حفظ العملية في IndexedDB:", event.target.error);
+                            reject(event.target.error);
+                        };
+                        
+                        addRequest.onsuccess = (event) => {
+                            resolve(event.target.result);
+                        };
+                    }
                 };
             });
         }
@@ -1660,6 +1697,23 @@
                     resolve(true);
                 };
             });
+        }
+        
+        // حذف سجل العمليات من Firebase
+        async function clearActivityLogFromFirebase() {
+            if (!database) {
+                console.log("Firebase غير متاح لحذف السجل");
+                return false;
+            }
+            
+            try {
+                await database.ref('activityLog').remove();
+                console.log("تم حذف سجل العمليات من Firebase");
+                return true;
+            } catch (error) {
+                console.error("خطأ في حذف سجل العمليات من Firebase:", error);
+                return false;
+            }
         }
         
         // تنسيق التاريخ والوقت (تعديل: استخدام التوقيت المحلي فقط)
@@ -1769,13 +1823,18 @@
                     // ترتيب حسب الوقت (الأحدث أولاً)
                     firebaseActivities.sort((a, b) => b.timestamp - a.timestamp);
                     
-                    // حفظ في IndexedDB
+                    // حفظ في IndexedDB مع التحقق من عدم التكرار
                     for (const activity of firebaseActivities) {
                         const { id, ...activityData } = activity;
-                        await saveActivityToIndexedDB(activityData);
+                        
+                        // التحقق مما إذا كان activityId موجودًا بالفعل
+                        const existingActivity = activityLog.find(a => a.activityId === activityData.activityId);
+                        if (!existingActivity) {
+                            await saveActivityToIndexedDB(activityData);
+                        }
                     }
                     
-                    console.log(`تمت مزامنة ${firebaseActivities.length} عملية من Firebase`);
+                    console.log(`تمت مزامنة سجل العمليات من Firebase`);
                     
                     // إعادة تحميل السجل من IndexedDB
                     activityLog = await readActivityLogFromIndexedDB();
@@ -1793,8 +1852,9 @@
             }
             
             try {
-                const activityId = 'activity_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                await database.ref('activityLog/' + activityId).set(activity);
+                // استخدام activityId كمعرف فريد في Firebase
+                const activityKey = activity.activityId.replace(/[.#$\[\]]/g, '_'); // استبدال الأحخاص الخاصة
+                await database.ref('activityLog/' + activityKey).set(activity);
                 return true;
             } catch (error) {
                 console.error("خطأ في إرسال العملية إلى Firebase:", error);
@@ -2631,12 +2691,21 @@
         });
         
         clearHistoryBtn.addEventListener('click', async () => {
-            if (confirm('هل أنت متأكد من مسح سجل العمليات بالكامل؟ لا يمكن التراجع عن هذا الإجراء.')) {
+            if (confirm('هل أنت متأكد من مسح سجل العمليات بالكامل؟ لا يمكن التراجع عن هذا الإجراء.\n\nهذا سيحذف السجل من الذاكرة المحلية ومن السحابة (إن أمكن).')) {
                 try {
+                    // حذف من IndexedDB
                     await clearActivityLogFromIndexedDB();
+                    
+                    // حذف من Firebase
+                    await clearActivityLogFromFirebase();
+                    
+                    // تحديث المصفوفة المحلية
                     activityLog = [];
+                    
+                    // تحديث العرض
                     displayActivityLog();
-                    alert('تم مسح سجل العمليات بنجاح');
+                    
+                    alert('تم مسح سجل العمليات بنجاح من جميع المواقع');
                 } catch (error) {
                     console.error("خطأ في مسح سجل العمليات:", error);
                     alert("حدث خطأ أثناء مسح سجل العمليات");
